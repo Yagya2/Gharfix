@@ -99,7 +99,7 @@ def register():
         data = request.form
         if User.query.filter_by(email=data['email']).first():
             flash('Email already registered!', 'error')
-            return redirect(url_for('register'))
+            return redirect(url_for('index'))
 
         user = User(
             name=data['name'],
@@ -111,7 +111,7 @@ def register():
         db.session.commit()
 
         flash('Account created successfully! Please login.', 'success')
-        return redirect(url_for('login'))
+        return redirect(url_for('index'))
     return redirect(url_for('index'))
 
 
@@ -127,6 +127,7 @@ def login():
             return redirect(url_for('index'))
         else:
             flash('Invalid email or password!', 'error')
+            return redirect(url_for('index'))
     return redirect(url_for('index'))
 
 
@@ -141,22 +142,30 @@ def logout():
 @app.route('/book', methods=['POST'])
 @login_required
 def book_service():
-    data = request.form
-    worker_id = request.form.get('worker_id')
+    try:
+        data = request.form
+        worker_id = request.form.get('worker_id')
 
-    booking = Booking(
-        user_id=current_user.id,
-        worker_id=worker_id,
-        service_name=data['service'],
-        address=data['address'],
-        city=data['city'],
-        booking_date=datetime.strptime(data['date'], '%Y-%m-%d').date(),
-        booking_time=datetime.strptime(data['time'], '%H:%M').time()
-    )
-    db.session.add(booking)
-    db.session.commit()
+        if not worker_id:
+            flash('Please select a worker.', 'error')
+            return redirect(url_for('index'))
 
-    flash('Booking confirmed! We will contact you soon.', 'success')
+        booking = Booking(
+            user_id=current_user.id,
+            worker_id=int(worker_id),
+            service_name=data['service'],
+            address=data['address'],
+            city=data['city'],
+            booking_date=datetime.strptime(data['date'], '%Y-%m-%d').date(),
+            booking_time=datetime.strptime(data['time'], '%H:%M').time()
+        )
+        db.session.add(booking)
+        db.session.commit()
+
+        flash('Booking confirmed! We will contact you soon.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Booking failed: {str(e)}', 'error')
     return redirect(url_for('index'))
 
 
@@ -260,20 +269,22 @@ def seed_database():
             worker = Worker(**w)
             db.session.add(worker)
 
-    # Seed Reviews
-    reviews_data = [
-        {'user_id': 1, 'worker_id': 1, 'rating': 5.0,
-            'comment': 'Great service! Electrician arrived on time.'},
-        {'user_id': 1, 'worker_id': 2, 'rating': 4.5,
-            'comment': 'Very professional plumber, fixed everything quickly.'},
-        {'user_id': 1, 'worker_id': 3, 'rating': 4.7,
-            'comment': 'Affordable and reliable service.'}
-    ]
+    # Seed Reviews (only if at least one user exists)
+    first_user = User.query.first()
+    if first_user:
+        reviews_data = [
+            {'user_id': first_user.id, 'worker_id': 1, 'rating': 5.0,
+                'comment': 'Great service! Electrician arrived on time.'},
+            {'user_id': first_user.id, 'worker_id': 2, 'rating': 4.5,
+                'comment': 'Very professional plumber, fixed everything quickly.'},
+            {'user_id': first_user.id, 'worker_id': 3, 'rating': 4.7,
+                'comment': 'Affordable and reliable service.'}
+        ]
 
-    for r in reviews_data:
-        if not Review.query.filter_by(comment=r['comment']).first():
-            review = Review(**r)
-            db.session.add(review)
+        for r in reviews_data:
+            if not Review.query.filter_by(comment=r['comment']).first():
+                review = Review(**r)
+                db.session.add(review)
 
     db.session.commit()
     print("Database seeded successfully!")
