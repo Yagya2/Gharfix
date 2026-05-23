@@ -291,9 +291,10 @@ def seed_database():
 
 # ============== INIT ==============
 
+# Initialize DB for both direct run and Gunicorn
+with app.app_context():
+    db.create_all()
+    seed_database()
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        seed_database()
     app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
